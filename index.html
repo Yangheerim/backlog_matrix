@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>백로그 우선순위 매트릭스</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#ffffff;--s1:#f5f5f5;--s2:#ebebeb;--bd:#d8d8d8;--bd2:#c0c0c0;--t:#1a1a1a;--t2:#555550;--t3:#909088;--ac:#5a8a00;--now:#ff6b35;--later:#2277dd;--r:6px;--r2:10px}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:var(--bg);color:var(--t);min-height:100vh;padding:20px 18px 40px}
+/* header */
+.hdr{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:16px;gap:12px;flex-wrap:wrap}
+.title{font-size:22px;font-weight:600;letter-spacing:-.3px;margin-bottom:4px}
+.subtitle{font-size:14px;color:var(--t2);font-family:'IBM Plex Mono',monospace}
+.hdr-right{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.badge{font-size:13px;font-family:'IBM Plex Mono',monospace;padding:4px 12px;border-radius:999px;border:1px solid var(--bd2);color:var(--t2);background:var(--s1)}
+.badge.now{border-color:var(--now);color:var(--now)}
+.badge.later{border-color:var(--later);color:var(--later)}
+/* token row */
+.token-row{display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap}
+.token-label{font-size:13px;font-family:'IBM Plex Mono',monospace;color:var(--t2);white-space:nowrap}
+.token-input{flex:1;min-width:200px;max-width:320px;background:var(--s1);border:1px solid var(--bd2);border-radius:var(--r);padding:6px 11px;font-size:13px;font-family:'IBM Plex Mono',monospace;color:var(--t);outline:none;transition:border-color .15s}
+.token-input:focus{border-color:var(--ac)}
+.token-input::placeholder{color:var(--t3)}
+.refresh-btn{display:inline-flex;align-items:center;gap:5px;font-size:14px;font-weight:500;padding:6px 15px;border-radius:var(--r);border:1px solid var(--ac);background:transparent;color:var(--ac);cursor:pointer;transition:background .15s,color .15s;white-space:nowrap}
+.refresh-btn:hover{background:var(--ac);color:#fff}
+.refresh-btn:active{transform:scale(.97)}
+.refresh-btn:disabled{opacity:.4;cursor:not-allowed}
+.spin{width:13px;height:13px;border:1.5px solid rgba(90,138,0,.3);border-top-color:var(--ac);border-radius:50%;animation:spin .7s linear infinite;display:inline-block}
+@keyframes spin{to{transform:rotate(360deg)}}
+/* filters */
+.filters{display:flex;align-items:center;gap:5px;margin-bottom:12px;flex-wrap:wrap}
+.fl{font-size:13px;font-family:'IBM Plex Mono',monospace;color:var(--t3);margin-right:2px}
+.fb{font-size:13px;font-family:'IBM Plex Mono',monospace;padding:4px 13px;border-radius:999px;border:1px solid var(--bd);background:transparent;color:var(--t2);cursor:pointer;transition:all .15s}
+.fb:hover{color:var(--t);border-color:var(--bd2)}
+.fb.active{background:var(--s2);border-color:var(--t2);color:var(--t)}
+.fb.fn.active{border-color:var(--now);color:var(--now);background:rgba(255,107,53,.08)}
+.fb.factive.active{border-color:#16a34a;color:#16a34a;background:rgba(22,163,74,.08)}
+.vsep{width:1px;height:16px;background:var(--bd);margin:0 3px}
+/* legend */
+.legend-row{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:12px;align-items:center}
+.li{display:flex;align-items:center;gap:5px;font-size:13px;font-family:'IBM Plex Mono',monospace;color:var(--t2)}
+.ld{width:9px;height:9px;border-radius:50%;flex-shrink:0}
+/* main layout - 2x2 scatter */
+.main{display:grid;grid-template-columns:44px 1fr;gap:0}
+.y-axis{display:flex;justify-content:flex-end;padding-right:8px;padding-top:0;align-items:center}
+.y-lbl{writing-mode:vertical-rl;transform:rotate(0deg);font-size:12px;font-family:'IBM Plex Mono',monospace;color:var(--t3);letter-spacing:.04em;text-align:center}
+.matrix-col{flex:1}
+/* scatter board */
+.scatter-wrap{position:relative;border:1px solid var(--bd);border-radius:var(--r2);overflow:hidden;background:#fff}
+.quadrants{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;width:100%;height:700px}
+.quad{position:relative;padding:10px 12px;border:.5px solid var(--bd)}
+.quad.q-tl{background:rgba(90,138,0,.04)}
+.quad.q-tr{background:rgba(34,119,221,.05)}
+.quad.q-bl{background:rgba(0,0,0,.015)}
+.quad.q-br{background:rgba(255,107,53,.04)}
+.quad-lbl{font-size:10px;font-family:'IBM Plex Mono',monospace;color:var(--t3);letter-spacing:.03em;position:absolute;top:8px;left:10px;pointer-events:none}
+/* scatter cards */
+.scard{position:absolute;transform:translate(-50%,-50%);width:140px;cursor:pointer;z-index:1;transition:z-index 0s,box-shadow .18s,transform .18s}
+.scard:hover{z-index:10;transform:translate(-50%,-50%)}
+/* x axis */
+.x-axis{display:flex;align-items:center;gap:6px;margin-top:6px;padding-left:0}
+.xl{font-size:12px;font-family:'IBM Plex Mono',monospace;color:var(--t3)}
+.xline{flex:1;height:1px;background:var(--bd);margin:0 6px}
+/* col headers */
+.col-hdrs{display:grid;grid-template-columns:1fr 1fr;margin-bottom:4px}
+.ch{text-align:center;font-size:12px;font-family:'IBM Plex Mono',monospace;color:var(--t3)}
+/* row labels */
+.row-hdrs{display:grid;grid-template-rows:1fr 1fr;height:700px;padding:0}
+.rh{display:flex;align-items:center;justify-content:flex-end;font-size:12px;font-family:'IBM Plex Mono',monospace;color:var(--t3);padding-right:6px}
+/* cards */
+.cards{display:flex;flex-direction:column;gap:4px}
+.card{background:#fff;border:1px solid #bbb;border-radius:var(--r);padding:8px 10px;cursor:pointer;transition:border-color .18s,box-shadow .18s,transform .18s;box-shadow:0 1px 3px rgba(0,0,0,.10),0 1px 2px rgba(0,0,0,.08)}
+.card:hover{border-color:#999;background:#fff;box-shadow:0 4px 12px rgba(0,0,0,.12),0 1px 3px rgba(0,0,0,.07)}
+.card-active{border-color:#16a34a !important;box-shadow:0 1px 3px rgba(22,163,74,.20),0 1px 8px rgba(22,163,74,.12) !important}
+.card-active:hover{border-color:#15803d !important;box-shadow:0 4px 12px rgba(22,163,74,.18),0 1px 3px rgba(22,163,74,.10) !important}
+.tag-row{display:flex;align-items:center;gap:5px;margin-bottom:5px;flex-wrap:wrap}
+
+.card-hdr{display:flex;align-items:flex-start;gap:6px}
+.pdot{width:7px;height:7px;border-radius:50%;flex-shrink:0;margin-top:4px}
+.cname{font-size:13px;color:var(--t);line-height:1.4}
+.cmeta{display:flex;align-items:center;gap:5px;flex-wrap:wrap}
+.impact-dot-sm{width:7px;height:7px;border-radius:50%;flex-shrink:0;display:inline-block}
+.impact-tag{display:inline-flex;align-items:center;gap:5px;padding:2px 10px;border-radius:999px !important;border:none !important;background:#e8e8e8;color:#444 !important;font-size:11px;font-family:'IBM Plex Mono',monospace}
+.status-tag{display:inline-flex;align-items:center;gap:4px;padding:2px 10px;border-radius:999px !important;border:none !important;background:#dcfce7;color:#15803d !important;font-size:11px;font-family:'IBM Plex Mono',monospace}
+.ctag{font-size:11px;font-family:'IBM Plex Mono',monospace;color:var(--t3);padding:2px 6px;border-radius:3px;border:1px solid var(--bd)}
+.ctag.cnow{border-color:rgba(255,107,53,.4);color:var(--now);display:none}
+.ctag.clater{border-color:rgba(34,119,221,.4);color:var(--later);display:none}
+.empty-c{font-size:13px;color:var(--t3);font-family:'IBM Plex Mono',monospace}
+/* x axis */
+.x-axis{display:flex;align-items:center;gap:6px;margin-top:6px;padding-left:32px}
+.xl{font-size:13px;font-family:'IBM Plex Mono',monospace;color:var(--t3)}
+.xline{flex:1;height:1px;background:var(--bd);margin:0 6px}
+/* error / status */
+.err{font-size:13px;color:#cc3333;background:rgba(204,51,51,.06);border:1px solid rgba(204,51,51,.2);border-radius:var(--r);padding:8px 12px;margin-bottom:11px;display:none;font-family:'IBM Plex Mono',monospace}
+.sbar{font-size:12px;font-family:'IBM Plex Mono',monospace;color:var(--t3);margin-top:10px;text-align:right}
+/* detail overlay */
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:100;align-items:center;justify-content:center;padding:20px}
+.overlay.open{display:flex}
+.panel{background:#fff;border:1px solid var(--bd2);border-radius:var(--r2);width:100%;max-width:430px;padding:24px;position:relative;animation:su .18s ease}
+@keyframes su{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+.pclose{position:absolute;top:14px;right:14px;width:28px;height:28px;border-radius:50%;border:1px solid var(--bd2);background:transparent;color:var(--t2);cursor:pointer;font-size:15px;display:flex;align-items:center;justify-content:center;transition:background .15s}
+.pclose:hover{background:var(--s2)}
+.pbadges{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:12px}
+.pb{font-size:12px;font-family:'IBM Plex Mono',monospace;padding:3px 10px;border-radius:999px;border:1px solid var(--bd2);color:var(--t2)}
+.ptitle{font-size:17px;font-weight:600;color:var(--t);margin-bottom:14px;line-height:1.4;padding-right:30px}
+.psec{margin-bottom:12px}
+.pslbl{font-size:12px;font-family:'IBM Plex Mono',monospace;color:var(--t3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px}
+.pstxt{font-size:14px;color:var(--t2);line-height:1.6}
+.pdiv{height:1px;background:var(--bd);margin:12px 0}
+</style>
+</head>
+<body>
+
+<div class="hdr">
+  <div>
+    <div class="title">백로그 우선순위 × 복잡도 매트릭스</div>
+    <div class="subtitle">카드 클릭 시 상세 내용 표시</div>
+  </div>
+  <div class="hdr-right">
+    <span class="badge" id="tb">— 개 항목</span>
+
+  </div>
+</div>
+
+
+
+<div class="filters">
+  <span class="fl">필터:</span>
+  <button class="fb active"     onclick="sf('all',this)">전체</button>
+  <div class="vsep"></div>
+  <button class="fb"            onclick="sf('high',this)">높은 우선순위만</button>
+  <div class="vsep"></div>
+  <button class="fb factive"    onclick="sf('active',this)">🟢 진행중</button>
+  <button class="fb"            onclick="sf('waiting',this)">⏸ 대기</button>
+</div>
+
+<div class="legend-row">
+  <div class="li"><span class="ld" style="background:#E24B4A"></span>임팩트 높음</div>
+  <div class="li"><span class="ld" style="background:#EF9F27"></span>임팩트 중간</div>
+</div>
+
+<div class="main">
+  <div class="y-axis">
+    <div class="y-lbl">↑ 높은 우선순위&nbsp;&nbsp;&nbsp;낮은 우선순위 ↓</div>
+  </div>
+  <div class="matrix-col">
+    <div class="col-hdrs">
+      <div class="ch">← 낮은 복잡도</div>
+      <div class="ch">높은 복잡도 →</div>
+    </div>
+    <div class="scatter-wrap">
+      <div class="quadrants" id="mg">
+        <div class="quad q-tl"><span class="quad-lbl">빠른 실행</span></div>
+        <div class="quad q-tr"><span class="quad-lbl">신중 검토</span></div>
+        <div class="quad q-bl"><span class="quad-lbl">후순위</span></div>
+        <div class="quad q-br"><span class="quad-lbl">재검토</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="sbar" id="sb"></div>
+
+<!-- Detail -->
+<div class="overlay" id="ov" onclick="ovc(event)">
+  <div class="panel">
+    <button class="pclose" onclick="cp()">×</button>
+    <div class="pbadges" id="pb"></div>
+    <div class="ptitle" id="pt"></div>
+    <div id="pbody"></div>
+  </div>
+</div>
+
+<script>
+const DB="35a7837188b2802997f9ffdb4bcf4b1a";
+const PD={"높음":"#E24B4A","중간":"#EF9F27","낮음":"#639922"};
+const ID={"높음":"#E24B4A","중간":"#EF9F27"};
+
+const INIT=[
+  {name:"초보자 모드 제공",priority:5,complexity:7,impact:"중간",status:"대기",problem:"초보자들은 상품 명칭이 낯설어서 상품리스트 진입 전에 포기한다",solution:"초보자모드 화면을 제공하면 상품리스트까지 진입이 증가할 것이다"},
+  {name:"광고 및 배너 노출 확대",priority:3,complexity:8,impact:"중간",status:"대기",problem:"상품에 대한 광고와 배너가 부족하다",solution:"최근 핫한 상품군으로 배너 노출하면 상품 가입율이 증가할 것이다"},
+  {name:"외화채권 화면 상단 설명 축소 및 리스트 우선 노출",priority:9,complexity:2,impact:"높음",status:"진행중",problem:"외화채권 메뉴까지는 들어왔는데 이후 어디로 들어가야 할지 모르겠다",solution:"상단 설명 축소 후 채권 리스트가 바로 보이게 하면 가입율이 올라갈 것이다"},
+  {name:"계좌번호 복사 및 채우기(입금) 버튼 추가",priority:6,complexity:3,impact:"높음",status:"대기",problem:"매수 자금이 부족하면 화면 이탈이 일어난다",solution:"계좌번호 복사 기능으로 바로 이체 가능하면 매수 완료율이 증가할 것이다"},
+  {name:"스크롤 안내 UI 표시",priority:2,complexity:2,impact:"중간",status:"대기",problem:"스크롤이 너무 길어 무섭다",solution:"스크롤 모양 표시로 정보 탐색 가능성을 안내하면 이탈이 낮아질 것이다"},
+  {name:"게이트 화면 탭 메뉴화",priority:8,complexity:8,impact:"높음",status:"진행중",problem:"게이트 화면에서 너무 많은 것을 보여주려다 보니 가치전달이 명확하지 않다",solution:"각 TAB의 화면을 게이트 화면에 메뉴화 한다"},
+  {name:"매수 이어하기 기능 추가",priority:5,complexity:7,impact:"중간",status:"대기",problem:"매수 진행 시 이탈한 경우 처음부터 다시 시작해야 한다",solution:"이어서 가입하기 버튼으로 완료율이 증가할 것이다"},
+  {name:"펀드 일괄매수 기능 도입",priority:9,complexity:3,impact:"높음",status:"진행중",problem:"한번에 여러가지 펀드를 사고 싶다",solution:"펀드 일괄매수 처리를 만들면 가입금액이 증가할 것이다"},
+  {name:"매수 완료 후 재거래 진입점 노출 확대",priority:3,complexity:5,impact:"중간",status:"대기",problem:"매수 완료 후 다양한 재거래에 대한 진입점 노출이 부족하다",solution:"재거래 서비스 진입점을 노출시키면 추가납입이 증가할 것이다"},
+  {name:"검색결과 게이트메뉴 우선노출 및 분류",priority:6,complexity:3,impact:"중간",status:"대기",problem:"키워드 검색 시 사용성 낮은 메뉴들이 더 위에 위치함",solution:"게이트메뉴를 최상단에 노출하면 진입 결정이 쉬워질 것이다"},
+  {name:"상세화면 가독성 개선 및 핵심요약 제공",priority:9,complexity:9,impact:"높음",status:"진행중",problem:"핵심 정보가 너무 많고 어렵다. 이 상품을 왜 사야하는지 모르겠다",solution:"세줄 요약 등의 기능으로 가입율이 증가할 것이다"},
+  {name:"펀드리스트 종목 선택 시 상세로 즉시 이동",priority:8,complexity:5,impact:"높음",status:"대기",problem:"종목 선택 시 상세정보/펀드매수 두 버튼이 동일한 랜딩인데 나누어져 있다",solution:"바로 상세정보로 이동하면 전환율이 증가할 것이다"},
+  {name:"상품 탭 메뉴화",priority:7,complexity:9,impact:"높음",status:"대기",problem:"하나의 화면에 TAB으로 상품들이 구성되어 있어 거부감이 든다",solution:"각 상품 TAB을 메뉴화해서 목적있는 진입 고객율을 높인다"},
+  {name:"1분 펀드 매수 가이드 제공",priority:8,complexity:5,impact:"중간",status:"진행중",problem:"초보투자자인 경우 진입장벽이 높다",solution:"펀드 1분 매수 가이드 제공으로 상품 가입율이 증가할 것이다"},
+  {name:"테마 리스트 순위 및 정렬조건 노출",priority:5,complexity:7,impact:"중간",status:"대기",problem:"테마별 리스트의 나열 기준이 없어 추가 탐색이 필요하다",solution:"순위 및 정렬 조건 노출로 상세화면 전환율이 증가할 것이다"},
+  {name:"ELS 주요 메뉴 시각적 바로가기 제공",priority:3,complexity:5,impact:"중간",status:"대기",problem:"ELS 청약 시 사용하는 메뉴는 거의 동일한데 늘 헷갈리는 메뉴가 많다",solution:"많이 이용하는 메뉴만 시각적으로 바로 보여주면 이탈율을 낮출 수 있다"},
+  {name:"게이트 화면 내 안내성 넛지/가이드 제공",priority:8,complexity:8,impact:"높음",status:"대기",problem:"게이트화면에서 뭘 눌러야 할지 몰라서 머뭇거리다 이탈한다",solution:"5초간 아무 동작이 없으면 안내성 컨텐츠를 제공하면 진입이 증가할 것이다"},
+  {name:"매수 후 자동이체/추가납입 약정 유도",priority:3,complexity:5,impact:"중간",status:"대기",problem:"펀드 매수 완료 후 적립식의 경우 자동이체를 별도로 설정해야 한다",solution:"추가납입 의사 고객에게 이체약정 추가 설정을 유도하면 가입율이 증가할 것이다"},
+  {name:"일·주 단위 펀드 모으기 메뉴 신설",priority:9,complexity:5,impact:"높음",status:"진행중",problem:"펀드 매수가 일회성으로 끝난다",solution:"일/주 펀드 모으기 메뉴를 별도로 구성하면 적립식 가입율이 증가할 것이다"},
+  {name:"게이트 화면 상세메뉴 가이드 문구 제공",priority:2,complexity:8,impact:"중간",status:"대기",problem:"게이트 화면이 막막하다",solution:"상세메뉴의 가이드 문구가 제공되면 막연함을 낮출 수 있을 것이다"},
+  {name:"게이트 상세메뉴 행동순서 기반 재구성",priority:2,complexity:9,impact:"중간",status:"대기",problem:"",solution:"고객행동 순서에 따른 메뉴구성으로 설계하면 다음단계 이탈률을 낮출 수 있다"},
+  {name:"가입자수/실시간 가입 넛지 배너 노출",priority:6,complexity:5,impact:"높음",status:"진행중",problem:"추천상품이 눈에 확 들어오지 않는다",solution:"넛지 배너로 실시간 가입 현황 강조하면 가입율이 증가할 것이다"},
+  {name:"필수 확인사항 자동 전환 처리",priority:2,complexity:2,impact:"중간",status:"대기",problem:"상세화면 진입하자마자 매수버튼이 비활성화되어 당황스럽다",solution:"필수 확인사항 자동 전환 처리로 매수프로세스 전환율이 증가할 것이다"},
+];
+
+let items=[...INIT],cf="all";
+
+// 우선순위(y)>=6, 복잡도(x)<=5 → 빠른실행(TL)
+// 우선순위(y)>=6, 복잡도(x)>5  → 신중검토(TR)
+// 우선순위(y)<6,  복잡도(x)<=5 → 후순위(BL)
+// 우선순위(y)<6,  복잡도(x)>5  → 재검토(BR)
+function gz(p,c){
+  const hi=p>=6, lo=c<=5;
+  if(hi&&lo)  return{l:"빠른 실행",col:"#5a8a00",cls:"zn",q:0};
+  if(hi&&!lo) return{l:"신중 검토",col:"#2277dd",cls:"zl",q:1};
+  if(!hi&&lo) return{l:"후순위",   col:"#888",   cls:"zd",q:2};
+  return           {l:"재검토",    col:"#ff6b35", cls:"zr",q:3};
+}
+
+function fi(){
+  if(cf==="high")    return items.filter(i=>i.priority>=7);
+  if(cf==="active")  return items.filter(i=>i.status==="진행중");
+  if(cf==="waiting") return items.filter(i=>i.status==="대기");
+  return items;
+}
+
+function sf(f,btn){
+  cf=f;
+  document.querySelectorAll(".fb").forEach(b=>b.classList.remove("active"));
+  btn.classList.add("active");
+  render();
+}
+
+function ubadges(){
+  document.getElementById("tb").textContent=items.length+"개 항목";
+}
+
+function render(){
+  // 4개 사분면 초기화 (라벨은 유지)
+  const quads=document.querySelectorAll(".quad");
+  quads.forEach(q=>{
+    // 기존 카드만 제거, quad-lbl은 유지
+    q.querySelectorAll(".scard").forEach(c=>c.remove());
+  });
+
+  const vis=fi();
+  const boardW=document.querySelector(".quadrants").offsetWidth||800;
+  const boardH=700;
+  const halfW=boardW/2, halfH=boardH/2;
+  const pad=16; // 내부 여백
+
+  vis.forEach(item=>{
+    const z=gz(item.priority,item.complexity);
+    const quad=quads[z.q];
+    const isActive=item.status==="진행중";
+
+    // 사분면 내 상대 좌표 계산 (1~10 → 0~1)
+    // x: 복잡도. q0,q2(왼쪽)은 1~5, q1,q3(오른쪽)은 6~10
+    // y: 우선순위. q0,q1(위)은 6~10, q2,q3(아래)은 1~5
+    let xRatio, yRatio;
+    const isLeft=z.q===0||z.q===2;
+    const isTop=z.q===0||z.q===1;
+
+    if(isLeft){
+      xRatio=(item.complexity-1)/4; // 1~5 → 0~1
+    } else {
+      xRatio=(item.complexity-6)/4; // 6~10 → 0~1
+    }
+    if(isTop){
+      yRatio=1-(item.priority-6)/4; // 6~10 → 1~0 (위가 높음)
+    } else {
+      yRatio=1-(item.priority-1)/4; // 1~5 → 1~0
+    }
+
+    // 카드 폭(140px) 고려해 패딩
+    const cardW=140, cardH=60;
+    const qW=halfW, qH=halfH;
+    const xPx=pad + xRatio*(qW - pad*2 - cardW/2*0) ;
+    const yPx=pad + yRatio*(qH - pad*2);
+
+    const cd=document.createElement("div");
+    cd.className="card scard"+(isActive?" card-active":"");
+    cd.style.left=Math.max(pad,Math.min(qW-pad,xPx))+"px";
+    cd.style.top=Math.max(pad,Math.min(qH-pad,yPx))+"px";
+    cd.onclick=()=>od(item);
+
+    const tagRow=document.createElement("div");tagRow.className="tag-row";
+    const ic=ID[item.impact]||"#999";
+    const ti=document.createElement("span");ti.className="ctag impact-tag";
+    const tdot=document.createElement("span");tdot.className="impact-dot-sm";tdot.style.background=ic;
+    const tlbl=document.createElement("span");tlbl.textContent=item.impact;
+    ti.appendChild(tdot);ti.appendChild(tlbl);
+    tagRow.appendChild(ti);
+    if(isActive){
+      const st=document.createElement("span");st.className="ctag status-tag";st.textContent="진행중";
+      tagRow.appendChild(st);
+    }
+    cd.appendChild(tagRow);
+
+    const nm=document.createElement("div");nm.className="cname";nm.textContent=item.name;
+    cd.appendChild(nm);
+
+    quad.appendChild(cd);
+  });
+}
+
+function od(item){
+  const z=gz(item.priority,item.complexity);
+  const ic=ID[item.impact]||"#999";
+  document.getElementById("pt").textContent=item.name;
+  document.getElementById("pb").innerHTML=`
+    <span class="pb" style="border-color:#aaa;color:#444">우선순위 ${item.priority}</span>
+    <span class="pb" style="border-color:#aaa;color:#444">복잡도 ${item.complexity}</span>
+    <span class="pb" style="border-color:${ic}55;color:${ic};background:${ic}11">임팩트 ${item.impact}</span>
+    <span class="pb" style="border-color:${z.col}99;color:${z.col==='#888'?'#666':z.col}">${z.l}</span>`;
+  const b=document.getElementById("pbody");b.innerHTML="";
+  if(item.problem){
+    b.innerHTML+=`<div class="psec"><div class="pslbl">Problem (이슈)</div><div class="pstxt">${item.problem}</div></div><div class="pdiv"></div>`;
+  }
+  if(item.solution){
+    b.innerHTML+=`<div class="psec"><div class="pslbl">Solution</div><div class="pstxt">${item.solution}</div></div>`;
+  }
+  document.getElementById("ov").classList.add("open");
+}
+function ovc(e){if(e.target===document.getElementById("ov"))cp();}
+function cp(){document.getElementById("ov").classList.remove("open");}
+document.addEventListener("keydown",e=>{if(e.key==="Escape")cp();});
+
+
+ubadges();
+window.addEventListener("load",()=>render());
+</script>
+</body>
+</html>
