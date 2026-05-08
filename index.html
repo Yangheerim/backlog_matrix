@@ -250,6 +250,20 @@ function render(){
   const halfW=boardW/2, halfH=boardH/2;
   const pad=16; // 내부 여백
 
+  // 같은 좌표 그룹별 인덱스 계산
+  const posCount={}, posTrack={};
+  vis.forEach(item=>{
+    const key=`${item.priority}_${item.complexity}`;
+    posCount[key]=(posCount[key]||0)+1;
+  });
+  const posIdx={};
+  vis.forEach(item=>{
+    const key=`${item.priority}_${item.complexity}`;
+    posTrack[key]=(posTrack[key]||0);
+    posIdx[item.name]=posTrack[key];
+    posTrack[key]++;
+  });
+
   vis.forEach(item=>{
     const z=gz(item.priority,item.complexity);
     const quad=quads[z.q];
@@ -276,8 +290,19 @@ function render(){
     // 카드 폭(140px) 고려해 패딩
     const cardW=140, cardH=60;
     const qW=halfW, qH=halfH;
-    const xPx=pad + xRatio*(qW - pad*2 - cardW/2*0) ;
-    const yPx=pad + yRatio*(qH - pad*2);
+    let xPx=pad + xRatio*(qW - pad*2 - cardW/2*0);
+    let yPx=pad + yRatio*(qH - pad*2);
+
+    // 같은 좌표 항목 오프셋: 시계방향으로 분산
+    const key=`${item.priority}_${item.complexity}`;
+    const total=posCount[key];
+    const idx=posIdx[item.name];
+    if(total>1){
+      const r=22;
+      const offsets=[[0,0],[r,0],[-r,0],[0,r],[0,-r],[r,r],[-r,-r],[r,-r],[-r,r]];
+      xPx+=offsets[idx%offsets.length][0];
+      yPx+=offsets[idx%offsets.length][1];
+    }
 
     const cd=document.createElement("div");
     cd.className="card scard"+(isActive?" card-active":"");
